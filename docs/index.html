@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SportNewsAI — Classificatore di articoli sportivi</title>
+  <link rel="icon" type="image/png" href="favicon.png" />
+  <style>
+    :root {
+      --bg:           #0d0d0d;
+      --surface:      #1a1a1a;
+      --surface2:     #2e2e2e;
+      --accent:       #f97316;
+      --accent-hover: #ea6c0a;
+      --success:      #22c55e;
+      --text:         #f5f5f5;
+      --muted:        #888888;
+      --radius:       14px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 3rem 1rem 4rem;
+    }
+
+    /* ── Header / Logo ── */
+    header { text-align: center; margin-bottom: 2.5rem; }
+
+    header a {
+      display: inline-block;
+      cursor: pointer;
+      background: transparent;
+    }
+    header a img {
+      height: 110px;
+      width: auto;
+      display: block;
+      background: transparent;
+    }
+
+    header p {
+      color: var(--muted);
+      margin-top: 0.75rem;
+      font-size: 1rem;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      width: 100%;
+      max-width: 680px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .card label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 0.6rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    textarea {
+      width: 100%;
+      height: 200px;
+      background: var(--bg);
+      border: 1.5px solid var(--surface2);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      padding: 0.85rem 1rem;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    textarea::placeholder { color: var(--surface2); }
+    textarea:focus { border-color: var(--accent); }
+
+    button#classify-btn {
+      margin-top: 1rem;
+      width: 100%;
+      padding: 0.85rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    button#classify-btn:hover:not(:disabled) {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+    }
+    button#classify-btn:active:not(:disabled) { transform: translateY(0); }
+    button#classify-btn:disabled {
+      background: var(--surface2);
+      color: var(--muted);
+      cursor: not-allowed;
+    }
+
+    /* ── Loading dot animation ── */
+    .loading-dots::after {
+      content: '';
+      animation: dots 1.2s steps(4, end) infinite;
+    }
+    @keyframes dots {
+      0%  { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+    }
+
+    /* ── Result card ── */
+    #result {
+      margin-top: 1.5rem;
+      width: 100%;
+      max-width: 680px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 2rem 1.75rem;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      animation: slideUp 0.35s ease;
+    }
+    #result.hidden { display: none; }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    #result-emoji {
+      display: block;
+      font-size: 3.5rem;
+      margin-bottom: 0.6rem;
+      line-height: 1;
+    }
+
+    #result-label {
+      font-size: 1.8rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    #result-label.known   { color: var(--text); }
+    #result-label.unknown { color: var(--muted); }
+
+    #result-msg {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── Confidence bar ── */
+    .confidence-wrap {
+      margin-top: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.45rem;
+    }
+    .confidence-bar-track {
+      width: 100%;
+      max-width: 320px;
+      height: 8px;
+      background: var(--surface2);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .confidence-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #f97316, #fbbf24);
+      border-radius: 999px;
+      transition: width 0.6s cubic-bezier(.4,0,.2,1);
+    }
+    .confidence-bar-fill.muted {
+      background: var(--surface2);
+    }
+    .confidence-label {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .confidence-label strong { color: var(--text); }
+
+    /* ── Breakdown probabilità ── */
+    .breakdown-title {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.6rem;
+      padding-top: 1.2rem;
+      border-top: 1px solid var(--surface2);
+      text-align: left;
+    }
+
+    #result-breakdown {
+      margin-top: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      text-align: left;
+      width: 100%;
+    }
+    .prob-row {
+      display: grid;
+      grid-template-columns: 10rem 1fr 3.5rem;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.45rem 0.65rem;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+    .prob-row.prob-top {
+      background: rgba(249, 115, 22, 0.12);
+      border: 1px solid rgba(249, 115, 22, 0.30);
+    }
+    .prob-sport {
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+    .prob-top .prob-sport { color: var(--text); font-weight: 600; }
+    .prob-bar-wrap {
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .prob-bar {
+      height: 100%;
+      background: #3a3a3a;
+      border-radius: 999px;
+      transition: width 0.5s cubic-bezier(.4,0,.2,1);
+    }
+    .prob-top .prob-bar { background: linear-gradient(90deg, #f97316, #fbbf24); }
+    .prob-pct {
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .prob-top .prob-pct { color: var(--accent); font-weight: 600; }
+
+    /* ── Supported categories ── */
+    .categories {
+      margin-top: 2.5rem;
+      width: 100%;
+      max-width: 680px;
+    }
+    .categories h2 {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.75rem;
+    }
+    .cat-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .cat-pill {
+      background: var(--surface);
+      border-radius: 999px;
+      padding: 0.35rem 0.85rem;
+      font-size: 0.875rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 3rem;
+      font-size: 0.8rem;
+      color: var(--surface2);
+      text-align: center;
+    }
+    footer a { color: var(--surface2); text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="#" id="logo-link">
+      <img src="logo_horizontal.png" alt="SportNewsAI" />
+    </a>
+    <p>Classificatore automatico di articoli sportivi</p>
+  </header>
+
+  <div class="card">
+    <label for="article-input">Testo dell'articolo (in inglese)</label>
+    <textarea
+      id="article-input"
+      placeholder="Es: The reigning champion crashed out in the third lap after a mechanical failure forced him to retire from the race..."
+    ></textarea>
+    <button id="classify-btn" disabled>
+      <span id="btn-text" class="loading-dots">Caricamento modello</span>
+    </button>
+  </div>
+
+  <div id="result" class="hidden">
+    <span id="result-emoji"></span>
+    <div id="result-label"></div>
+    <div id="result-confidence"></div>
+    <div id="result-msg"></div>
+    <div id="result-breakdown"></div>
+  </div>
+
+  <div class="categories">
+    <h2>Categorie supportate</h2>
+    <div class="cat-grid">
+      <span class="cat-pill">⚽ Calcio</span>
+      <span class="cat-pill">🎾 Tennis</span>
+      <span class="cat-pill">🏀 Pallacanestro</span>
+      <span class="cat-pill">🏉 Rugby</span>
+      <span class="cat-pill">🏎️ Formula 1</span>
+      <span class="cat-pill">⚾ Baseball</span>
+      <span class="cat-pill">⛳ Golf</span>
+    </div>
+  </div>
+
+  <footer>
+    <p>Modello: LinearSVC + TF-IDF — Accuratezza: 97.93% &nbsp;·&nbsp;
+      <a href="https://github.com/ChrisShow/SportNewsAI" target="_blank">GitHub</a>
+    </p>
+  </footer>
+
+  <script src="classifier.js"></script>
+  <script>
+    document.getElementById('logo-link').addEventListener('click', function(e) {
+      e.preventDefault();
+      document.getElementById('article-input').value = '';
+      document.getElementById('result').classList.add('hidden');
+    });
+  </script>
+</body>
+</html>

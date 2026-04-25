@@ -1,0 +1,16 @@
+# Ambienti virtuali
+venv/
+env/
+
+# Dati e Modelli (Ignorali per non intasare il repo)
+data/
+models/
+
+# File temporanei Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Variabili d'ambiente e credenziali
+.env
+api-keys.csv
